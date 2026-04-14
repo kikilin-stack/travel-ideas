@@ -16,6 +16,8 @@ class TravelIdea extends Model
         'destination',
         'title',
         'description',
+        'start_date',
+        'end_date',
         'travel_date',
         'tags',
         'cover_image',
@@ -25,6 +27,8 @@ class TravelIdea extends Model
     protected function casts(): array
     {
         return [
+            'start_date' => 'date',
+            'end_date' => 'date',
             'travel_date' => 'date',
             'is_public' => 'boolean',
         ];

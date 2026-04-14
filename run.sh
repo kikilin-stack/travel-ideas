@@ -1,10 +1,36 @@
 #!/bin/bash
-# 在项目根目录启动开发服务器（public 为根，静态资源可访问）
+# Start Laravel dev server from project root (document root: public, router for static files).
 cd "$(dirname "$0")"
+
 PORT=8000
 if lsof -i :$PORT -t >/dev/null 2>&1; then
   echo "Port $PORT in use, trying 8080..."
   PORT=8080
 fi
-echo "Starting server at http://127.0.0.1:$PORT (login: http://127.0.0.1:$PORT/login)"
-php -S 127.0.0.1:$PORT -t public public/router.php
+
+# Listen on all interfaces so other devices on the same network can connect.
+HOST=0.0.0.0
+
+LAN_IP=""
+for IFACE in en0 en1 en2; do
+  IP=$(ipconfig getifaddr "$IFACE" 2>/dev/null)
+  if [ -n "$IP" ]; then
+    LAN_IP="$IP"
+    break
+  fi
+done
+
+echo ""
+echo "Server listening on all interfaces (port $PORT)."
+echo "  This machine:  http://127.0.0.1:$PORT"
+if [ -n "$LAN_IP" ]; then
+  echo "  Same Wi‑Fi/LAN: http://${LAN_IP}:$PORT"
+else
+  echo "  Same Wi‑Fi/LAN: http://<your-LAN-IP>:$PORT  (run: ipconfig getifaddr en0)"
+fi
+echo "  Login page:     http://127.0.0.1:$PORT/login"
+echo ""
+echo "If others cannot connect: allow incoming TCP $PORT in macOS Firewall / Security settings."
+echo ""
+
+php -S "${HOST}:$PORT" -t public public/router.php

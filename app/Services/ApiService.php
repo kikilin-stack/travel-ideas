@@ -81,7 +81,7 @@ class ApiService
                 'q' => $queryCity,
                 'appid' => $this->weatherApiKey,
                 'units' => 'metric',
-                'lang' => 'zh_cn',
+                'lang' => 'en',
                 'cnt' => 40,
             ]);
 
@@ -260,9 +260,9 @@ class ApiService
         $hotels = [];
         foreach (($raw['data'] ?? []) as $h) {
             $hotels[] = [
-                'name' => $h['name'] ?? '未知酒店',
+                'name' => $h['name'] ?? 'Unknown Hotel',
                 'rating' => $h['rating'] ?? null,
-                'price' => $h['hotelId'] ? '价格面议' : null,
+                'price' => $h['hotelId'] ? 'Price on request' : null,
             ];
         }
         if (empty($hotels)) {
@@ -448,17 +448,17 @@ class ApiService
     protected function mapOpenMeteoCode(int $code): string
     {
         return match (true) {
-            $code === 0 => '晴',
-            in_array($code, [1, 2]) => '晴，少云',
-            $code === 3 => '多云',
-            in_array($code, [45, 48]) => '有雾',
-            in_array($code, [51, 53, 55, 56, 57]) => '毛毛雨',
-            in_array($code, [61, 63, 65, 66, 67]) => '降雨',
-            in_array($code, [71, 73, 75, 77]) => '降雪',
-            in_array($code, [80, 81, 82]) => '阵雨',
-            in_array($code, [85, 86]) => '阵雪',
-            in_array($code, [95, 96, 99]) => '雷雨',
-            default => '天气变化',
+            $code === 0 => 'Clear sky',
+            in_array($code, [1, 2]) => 'Mainly clear',
+            $code === 3 => 'Cloudy',
+            in_array($code, [45, 48]) => 'Fog',
+            in_array($code, [51, 53, 55, 56, 57]) => 'Drizzle',
+            in_array($code, [61, 63, 65, 66, 67]) => 'Rain',
+            in_array($code, [71, 73, 75, 77]) => 'Snow',
+            in_array($code, [80, 81, 82]) => 'Rain showers',
+            in_array($code, [85, 86]) => 'Snow showers',
+            in_array($code, [95, 96, 99]) => 'Thunderstorm',
+            default => 'Weather change',
         };
     }
 
@@ -472,13 +472,13 @@ class ApiService
                 'temp' => 18 + $i,
                 'temp_min' => 15,
                 'temp_max' => 22,
-                'description' => '晴',
+                'description' => 'Sunny',
                 'icon' => 'https://openweathermap.org/img/wn/01d@2x.png',
             ];
         }
         return [
             'list' => $list,
-            'city' => $city ?: '示例城市',
+            'city' => $city ?: 'Sample City',
             'source' => 'mock',
         ];
     }
@@ -486,17 +486,17 @@ class ApiService
     protected function getMockHotelData(string $city): array
     {
         return [
-            ['name' => '示例酒店 A', 'rating' => '4.5', 'price' => '¥800起'],
-            ['name' => '示例酒店 B', 'rating' => '4.2', 'price' => '¥600起'],
-            ['name' => '示例酒店 C', 'rating' => '4.0', 'price' => '¥500起'],
+            ['name' => 'Sample Hotel A', 'rating' => '4.5', 'price' => 'From CNY 800'],
+            ['name' => 'Sample Hotel B', 'rating' => '4.2', 'price' => 'From CNY 600'],
+            ['name' => 'Sample Hotel C', 'rating' => '4.0', 'price' => 'From CNY 500'],
         ];
     }
 
     protected function getMockFoodData(string $city): array
     {
         return [
-            ['id' => 1, 'title' => '当地特色菜 1', 'image' => 'https://spoonacular.com/recipeImages/1-312x231.jpg', 'summary' => '美味推荐'],
-            ['id' => 2, 'title' => '当地特色菜 2', 'image' => 'https://spoonacular.com/recipeImages/2-312x231.jpg', 'summary' => '人气之选'],
+            ['id' => 1, 'title' => 'Local Signature Dish 1', 'image' => 'https://spoonacular.com/recipeImages/1-312x231.jpg', 'summary' => 'Recommended local flavor'],
+            ['id' => 2, 'title' => 'Local Signature Dish 2', 'image' => 'https://spoonacular.com/recipeImages/2-312x231.jpg', 'summary' => 'Popular local pick'],
         ];
     }
 }

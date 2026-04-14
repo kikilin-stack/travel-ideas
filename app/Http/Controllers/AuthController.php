@@ -10,9 +10,6 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
-/**
- * 认证控制器：处理登录、注册、退出
- */
 class AuthController extends Controller
 {
     public function showLogin(): View
@@ -31,10 +28,10 @@ class AuthController extends Controller
             'email' => 'required|email',
             'password' => 'required|min:6',
         ], [
-            'email.required' => '请输入邮箱',
-            'email.email' => '邮箱格式不正确',
-            'password.required' => '请输入密码',
-            'password.min' => '密码至少6位',
+            'email.required' => 'Email is required.',
+            'email.email' => 'Please enter a valid email address.',
+            'password.required' => 'Password is required.',
+            'password.min' => 'Password must be at least 6 characters.',
         ]);
 
         if (Auth::attempt($validated, $request->boolean('remember'))) {
@@ -46,10 +43,11 @@ class AuthController extends Controller
         }
 
         if ($request->wantsJson()) {
-            return response()->json(['errors' => ['email' => ['邮箱或密码错误']]], 422);
+            return response()->json(['errors' => ['email' => ['Invalid email or password.']]], 422);
         }
+
         throw ValidationException::withMessages([
-            'email' => ['邮箱或密码错误'],
+            'email' => ['Invalid email or password.'],
         ]);
     }
 
@@ -60,14 +58,14 @@ class AuthController extends Controller
             'email' => 'required|email|unique:users,email',
             'password' => 'required|min:6|confirmed',
         ], [
-            'name.required' => '请输入姓名',
-            'name.between' => '姓名长度为2-50个字符',
-            'email.required' => '请输入邮箱',
-            'email.email' => '邮箱格式不正确',
-            'email.unique' => '该邮箱已注册',
-            'password.required' => '请输入密码',
-            'password.min' => '密码至少6位',
-            'password.confirmed' => '两次密码不一致',
+            'name.required' => 'Name is required.',
+            'name.between' => 'Name must be between 2 and 50 characters.',
+            'email.required' => 'Email is required.',
+            'email.email' => 'Please enter a valid email address.',
+            'email.unique' => 'This email is already registered.',
+            'password.required' => 'Password is required.',
+            'password.min' => 'Password must be at least 6 characters.',
+            'password.confirmed' => 'Password confirmation does not match.',
         ]);
 
         $user = User::create([
@@ -78,9 +76,11 @@ class AuthController extends Controller
 
         Auth::login($user);
         $request->session()->regenerate();
+
         if ($request->wantsJson()) {
             return response()->json(['redirect' => route('travel-ideas.index')]);
         }
+
         return redirect()->route('travel-ideas.index');
     }
 

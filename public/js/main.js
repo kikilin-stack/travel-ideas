@@ -11,11 +11,11 @@ $(function() {
 
     $(document).ajaxError(function(event, xhr) {
         if (xhr.status === 401) {
-            if (confirm('请先登录')) {
+            if (confirm('Please log in first.')) {
                 window.location.href = '/login';
             }
         } else if (xhr.status === 403) {
-            alert('您没有权限执行此操作');
+            alert('You do not have permission to perform this action.');
         }
     });
 

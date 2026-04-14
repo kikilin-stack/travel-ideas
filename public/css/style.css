@@ -188,6 +188,16 @@ a:hover { color: var(--primary-dark); text-decoration: none; }
 .search-box input:focus { outline: none; border-color: var(--primary); }
 .search-box .btn-secondary { padding: 10px 20px; }
 
+.search-results-summary {
+    margin: -12px 0 24px;
+    font-size: 0.95rem;
+    color: var(--text-muted);
+}
+.search-results-summary strong {
+    color: var(--text);
+    font-weight: 700;
+}
+
 .ideas-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
@@ -234,6 +244,22 @@ a:hover { color: var(--primary-dark); text-decoration: none; }
     font-size: 0.9rem;
     font-weight: 500;
 }
+.card-search-facts {
+    list-style: none;
+    margin: 0 0 16px;
+    padding: 12px 0 0;
+    border-top: 1px solid var(--border);
+    font-size: 0.88rem;
+    color: var(--text-muted);
+}
+.card-search-facts li {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 4px 0;
+}
+.card-search-facts .label { font-weight: 600; color: var(--text); }
+.card-search-facts .value { font-variant-numeric: tabular-nums; }
 .card-desc {
     margin: 0 0 14px;
     font-size: 0.9rem;

@@ -9,15 +9,12 @@ use Illuminate\Database\Seeder;
 
 class DatabaseSeeder extends Seeder
 {
-    /**
-     * 填充测试用户、旅行想法和评论
-     */
     public function run(): void
     {
         $users = [
-            ['name' => '张三', 'email' => 'zhangsan@example.com'],
-            ['name' => '李四', 'email' => 'lisi@example.com'],
-            ['name' => '王五', 'email' => 'wangwu@example.com'],
+            ['name' => 'Alex Zhang', 'email' => 'zhangsan@example.com'],
+            ['name' => 'Leo Li', 'email' => 'lisi@example.com'],
+            ['name' => 'Will Wang', 'email' => 'wangwu@example.com'],
         ];
 
         $created = [];
@@ -30,11 +27,11 @@ class DatabaseSeeder extends Seeder
         }
 
         $destinations = [
-            ['东京', '东京樱花季之旅', '计划春天去东京看樱花，浅草、上野、新宿都想去。', '2025-04-01', '樱花,自由行,美食'],
-            ['巴黎', '巴黎七日游', '埃菲尔铁塔、卢浮宫、塞纳河游船，感受浪漫之都。', '2025-06-15', '艺术,博物馆,浪漫'],
-            ['纽约', '纽约都市行', '时代广场、中央公园、自由女神像，体验大苹果。', '2025-08-01', '都市,购物,打卡'],
-            ['北京', '故宫与长城', '历史文化之旅，故宫、长城、胡同小吃。', '2025-10-01', '历史,文化,美食'],
-            ['上海', '魔都周末游', '外滩、田子坊、迪士尼，周末两日游。', null, '周末,亲子,迪士尼'],
+            ['Tokyo', 'Tokyo Cherry Blossom Season Trip', 'Planning a spring trip to Tokyo to enjoy cherry blossoms, and I want to visit Asakusa, Ueno, and Shinjuku.', '2025-04-01', 'Cherry Blossom,Independent Travel,Food'],
+            ['Paris', 'Seven Days in Paris', 'Eiffel Tower, Louvre Museum, and a Seine river cruise to experience the romance of Paris.', '2025-06-15', 'Art,Museum,Romance'],
+            ['New York', 'New York City Adventure', 'Times Square, Central Park, and the Statue of Liberty for a classic NYC experience.', '2025-08-01', 'City,Shopping,Landmarks'],
+            ['Beijing', 'Forbidden City and Great Wall', 'A cultural history trip including the Forbidden City, Great Wall, and traditional hutong food.', '2025-10-01', 'History,Culture,Food'],
+            ['Shanghai', 'Shanghai Weekend Getaway', 'The Bund, Tianzifang, and Disneyland in a two-day city break.', null, 'Weekend,Family,Disneyland'],
         ];
 
         foreach ($destinations as $i => $d) {
@@ -43,22 +40,25 @@ class DatabaseSeeder extends Seeder
                 'destination' => $d[0],
                 'title' => $d[1],
                 'description' => $d[2],
+                'start_date' => $d[3],
+                'end_date' => $d[3],
                 'travel_date' => $d[3],
                 'tags' => $d[4],
                 'cover_image' => null,
                 'is_public' => true,
             ]);
+
             Comment::create([
                 'travel_idea_id' => $idea->id,
                 'user_id' => $created[($i + 1) % 3]->id,
-                'content' => '看起来很棒，收藏了！',
+                'content' => 'Looks great, saved this idea!',
             ]);
         }
 
         Comment::create([
             'travel_idea_id' => 1,
             'user_id' => $created[2]->id,
-            'content' => '东京春天确实很美，推荐去目黑川。',
+            'content' => 'Tokyo is beautiful in spring. Meguro River is highly recommended.',
         ]);
     }
 }

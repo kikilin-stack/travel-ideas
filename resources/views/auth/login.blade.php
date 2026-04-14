@@ -1,30 +1,30 @@
 @extends('layouts.app')
-@section('title', '用户登录')
+@section('title', 'Log in')
 
 @section('content')
 <div class="auth-container">
-    <h2>用户登录</h2>
+    <h2>Log in</h2>
     <form id="loginForm" class="auth-form" method="POST" action="{{ route('login') }}">
         @csrf
         <div class="form-group">
-            <label for="email">邮箱</label>
-            <input type="email" id="email" name="email" required placeholder="请输入邮箱" value="{{ old('email') }}">
+            <label for="email">Email</label>
+            <input type="email" id="email" name="email" required placeholder="Enter your email" value="{{ old('email') }}">
             <span class="error-msg" id="email-error"></span>
         </div>
         <div class="form-group">
-            <label for="password">密码</label>
-            <input type="password" id="password" name="password" required minlength="6" placeholder="至少6位密码">
+            <label for="password">Password</label>
+            <input type="password" id="password" name="password" required minlength="6" placeholder="At least 6 characters">
             <span class="error-msg" id="password-error"></span>
         </div>
         <div class="form-group">
             <label class="checkbox-label">
-                <input type="checkbox" name="remember" value="1"> 记住我
+                <input type="checkbox" name="remember" value="1"> Remember me
             </label>
         </div>
         <div class="form-group">
-            <button type="submit" class="btn-primary">登录</button>
+            <button type="submit" class="btn-primary">Log in</button>
         </div>
-        <p class="form-link">还没有账号？<a href="{{ route('register') }}">立即注册</a></p>
+        <p class="form-link">No account yet? <a href="{{ route('register') }}">Create one</a></p>
     </form>
 </div>
 @endsection
@@ -39,10 +39,11 @@ $(function() {
         var email = $('#email').val().trim();
         var password = $('#password').val();
         var ok = true;
-        if (!email) { $('#email-error').text('请输入邮箱'); ok = false; }
-        if (!password) { $('#password-error').text('请输入密码'); ok = false; }
-        if (password.length < 6) { $('#password-error').text('密码至少6位'); ok = false; }
+        if (!email) { $('#email-error').text('Email is required'); ok = false; }
+        if (!password) { $('#password-error').text('Password is required'); ok = false; }
+        if (password.length < 6) { $('#password-error').text('Password must be at least 6 characters'); ok = false; }
         if (!ok) return;
+
         $.ajax({
             url: $form.attr('action'),
             method: 'POST',
@@ -52,7 +53,7 @@ $(function() {
                 window.location.href = res.redirect || '{{ route("travel-ideas.index") }}';
             },
             error: function(xhr) {
-                var msg = xhr.responseJSON?.errors?.email?.[0] || xhr.responseJSON?.message || '登录失败，请重试';
+                var msg = xhr.responseJSON?.errors?.email?.[0] || xhr.responseJSON?.message || 'Login failed. Please try again.';
                 $('#email-error').text(msg);
             }
         });
