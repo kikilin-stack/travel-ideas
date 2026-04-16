@@ -11,10 +11,10 @@ use Illuminate\Support\Facades\Log;
  */
 class ApiService
 {
-    protected ?string $weatherApiKey;
-    protected ?string $amadeusClientId;
-    protected ?string $amadeusClientSecret;
     protected ?string $spoonacularApiKey;
+    protected ?string $exchangeRateApiKey;
+    protected ?string $amapApiKey;
+    protected ?string $rapidapiBookingKey;
 
     /** 城市名 -> IATA 代码 */
     protected array $cityCodes = [
@@ -48,12 +48,47 @@ class ApiService
         '大阪' => 'Osaka',
     ];
 
+    /** 城市名 -> 货币代码 */
+    protected array $cityCurrency = [
+        '东京' => 'JPY', 'Tokyo' => 'JPY',
+        '巴黎' => 'EUR', 'Paris' => 'EUR',
+        '纽约' => 'USD', 'New York' => 'USD',
+        '北京' => 'CNY', 'Beijing' => 'CNY',
+        '上海' => 'CNY', 'Shanghai' => 'CNY',
+        '伦敦' => 'GBP', 'London' => 'GBP',
+        '首尔' => 'KRW', 'Seoul' => 'KRW',
+        '曼谷' => 'THB', 'Bangkok' => 'THB',
+        '罗马' => 'EUR', 'Rome' => 'EUR',
+        '香港' => 'HKD', 'Hong Kong' => 'HKD',
+        '新加坡' => 'SGD', 'Singapore' => 'SGD',
+        '大阪' => 'JPY', 'Osaka' => 'JPY',
+    ];
+
+    /** 城市名 -> 语言名称 */
+    protected array $cityLanguage = [
+        '东京' => 'Japanese', 'Tokyo' => 'Japanese',
+        '巴黎' => 'French', 'Paris' => 'French',
+        '纽约' => 'English', 'New York' => 'English',
+        '北京' => 'Chinese', 'Beijing' => 'Chinese',
+        '上海' => 'Chinese', 'Shanghai' => 'Chinese',
+        '伦敦' => 'English', 'London' => 'English',
+        '首尔' => 'Korean', 'Seoul' => 'Korean',
+        '曼谷' => 'Thai', 'Bangkok' => 'Thai',
+        '罗马' => 'Italian', 'Rome' => 'Italian',
+        '香港' => 'Cantonese', 'Hong Kong' => 'Cantonese',
+        '新加坡' => 'English', 'Singapore' => 'English',
+        '大阪' => 'Japanese', 'Osaka' => 'Japanese',
+    ];
+
     public function __construct()
     {
         $this->weatherApiKey = trim((string) config('services.openweather.key'));
         $this->amadeusClientId = trim((string) config('services.amadeus.client_id'));
         $this->amadeusClientSecret = trim((string) config('services.amadeus.client_secret'));
         $this->spoonacularApiKey = trim((string) config('services.spoonacular.key'));
+        $this->exchangeRateApiKey = trim((string) config('services.exchangerate.key'));
+        $this->amapApiKey = trim((string) config('services.amap.key'));
+        $this->rapidapiBookingKey = trim((string) config('services.rapidapi_booking.key'));
     }
 
     /**
@@ -129,41 +164,83 @@ class ApiService
     }
 
     /**
-     * 获取酒店列表（需 Amadeus token）
+     * 获取酒店列表（使用 RapidAPI Booking.com）
      */
     public function getHotels(string $city, ?string $checkIn = null): array|false
     {
-        $checkIn = $checkIn ?? now()->format('Y-m-d');
-        $cacheKey = "hotels_{$city}_{$checkIn}";
+        $cacheKey = "hotels_booking_" . md5($city);
         $cached = ApiCache::getCache($cacheKey);
         if ($cached) {
             return $cached->data;
         }
 
-        if (empty($this->amadeusClientId) || empty($this->amadeusClientSecret)) {
+        if (empty($this->rapidapiBookingKey)) {
             return $this->getMockHotelData($city);
         }
 
         try {
-            $token = $this->getAmadeusToken();
-            if (!$token) {
-                return $this->getMockHotelData($city);
-            }
-            $cityCode = $this->getCityCode($city);
-            $response = Http::withToken($token)->get(
-                'https://api.amadeus.com/v1/reference-data/locations/hotels/by-city',
-                ['cityCode' => $cityCode, 'radius' => 5, 'radiusUnit' => 'KM']
-            );
-            if ($response->successful()) {
-                $data = $this->formatHotelData($response->json());
-                ApiCache::setCache($cacheKey, 'hotels', $data, 30);
-                return $data;
-            }
-            Log::warning('Hotel API response not successful', [
-                'city' => $city,
-                'status' => $response->status(),
-                'body' => $response->body(),
+            $queryCity = $this->normalizeWeatherCity($city);
+            $destResponse = Http::withHeaders([
+                'x-rapidapi-host' => 'booking-com15.p.rapidapi.com',
+                'x-rapidapi-key' => $this->rapidapiBookingKey
+            ])->timeout(12)->get('https://booking-com15.p.rapidapi.com/api/v1/hotels/searchDestination', [
+                'query' => $queryCity
             ]);
+
+            if ($destResponse->successful()) {
+                $destData = $destResponse->json();
+                if (($destData['status'] ?? false) && !empty($destData['data'])) {
+                    $destId = $destData['data'][0]['dest_id'];
+                    $searchType = $destData['data'][0]['search_type'];
+
+                    $arrivalDate = now()->addMonths(1)->startOfMonth()->format('Y-m-d');
+                    $departureDate = now()->addMonths(1)->startOfMonth()->addDays(2)->format('Y-m-d');
+                    
+                    $hotelsResponse = Http::withHeaders([
+                        'x-rapidapi-host' => 'booking-com15.p.rapidapi.com',
+                        'x-rapidapi-key' => $this->rapidapiBookingKey
+                    ])->timeout(15)->get('https://booking-com15.p.rapidapi.com/api/v1/hotels/searchHotels', [
+                        'dest_id' => $destId,
+                        'search_type' => $searchType,
+                        'arrival_date' => $arrivalDate,
+                        'departure_date' => $departureDate,
+                        'adults' => 1,
+                        'room_qty' => 1
+                    ]);
+
+                    if ($hotelsResponse->successful()) {
+                        $hotelsData = $hotelsResponse->json();
+                        if (($hotelsData['status'] ?? false) && !empty($hotelsData['data']['hotels'])) {
+                            $hotels = [];
+                            foreach (array_slice($hotelsData['data']['hotels'], 0, 6) as $h) {
+                                $prop = $h['property'] ?? [];
+                                $price = $prop['priceBreakdown']['grossPrice'] ?? null;
+                                $priceStr = $price ? ($price['currency'] . ' ' . round($price['value'])) : 'Price on request';
+                                $img = null;
+                                if (!empty($prop['photoUrls']) && is_array($prop['photoUrls'])) {
+                                    $img = $prop['photoUrls'][0];
+                                }
+                                $hotels[] = [
+                                    'name' => $prop['name'] ?? 'Unknown Hotel',
+                                    'rating' => !empty($prop['reviewScoreWord']) ? ($prop['reviewScore'] . ' ' . $prop['reviewScoreWord']) : ($prop['reviewScore'] ?? 'New'),
+                                    'price' => $priceStr,
+                                    'image' => $img,
+                                    'lat' => $prop['latitude'] ?? null,
+                                    'lng' => $prop['longitude'] ?? null,
+                                ];
+                            }
+                            if (!empty($hotels)) {
+                                ApiCache::setCache($cacheKey, 'hotels', $hotels, 120);
+                                return $hotels;
+                            }
+                        }
+                    } else {
+                        Log::warning('Booking Hotels API fail', ['body' => $hotelsResponse->body()]);
+                    }
+                }
+            } else {
+                Log::warning('Booking Dest API fail', ['body' => $destResponse->body()]);
+            }
         } catch (\Throwable $e) {
             Log::error('Hotel API Error: ' . $e->getMessage());
         }
@@ -208,6 +285,151 @@ class ApiService
             Log::error('Food API Error: ' . $e->getMessage());
         }
         return $this->getMockFoodData($city);
+    }
+
+    public function getCityLanguageAndCurrency(string $city): array
+    {
+        $currency = 'USD';
+        $language = 'English';
+        foreach ($this->cityCurrency as $name => $curr) {
+            if (stripos($city, $name) !== false || stripos($name, $city) !== false) {
+                $currency = $curr;
+                break;
+            }
+        }
+        foreach ($this->cityLanguage as $name => $lang) {
+            if (stripos($city, $name) !== false || stripos($name, $city) !== false) {
+                $language = $lang;
+                break;
+            }
+        }
+        return ['currency' => $currency, 'language' => $language];
+    }
+
+    /**
+     * 获取汇率数据
+     */
+    public function getExchangeRates(): array|false
+    {
+        $cacheKey = 'exchange_rates_hkd';
+        $cached = ApiCache::getCache($cacheKey);
+        if ($cached) {
+            return $cached->data;
+        }
+
+        if (empty($this->exchangeRateApiKey)) {
+            return $this->getMockExchangeRateData();
+        }
+
+        try {
+            $response = Http::timeout(12)->get("https://v6.exchangerate-api.com/v6/{$this->exchangeRateApiKey}/latest/HKD");
+            if ($response->successful()) {
+                $data = $response->json();
+                if (($data['result'] ?? '') === 'success' && !empty($data['conversion_rates'])) {
+                    $result = [
+                        'base' => 'HKD',
+                        'rates' => $data['conversion_rates'],
+                        'source' => 'real'
+                    ];
+                    ApiCache::setCache($cacheKey, 'exchangerate', $result, 120);
+                    return $result;
+                }
+            }
+            Log::warning('ExchangeRate API response not successful', [
+                'status' => $response->status(),
+                'body' => $response->body(),
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('ExchangeRate API Error: ' . $e->getMessage());
+        }
+        return $this->getMockExchangeRateData();
+    }
+
+    /**
+     * 获取高德当地景点推荐
+     */
+    public function getAmapAttractions(string $city): array|false
+    {
+        $cacheKey = 'amap_attractions_' . md5($city);
+        $cached = ApiCache::getCache($cacheKey);
+        if ($cached) {
+            return $cached->data;
+        }
+
+        if (empty($this->amapApiKey)) {
+            return $this->getMockAmapData($city);
+        }
+
+        $amapCity = $this->normalizeAmapCity($city);
+
+        try {
+            $response = Http::timeout(12)->get('https://restapi.amap.com/v3/place/text', [
+                'key' => $this->amapApiKey,
+                'keywords' => '景点',
+                'city' => $amapCity,
+                'citylimit' => 'true',
+                'offset' => 6,
+                'page' => 1,
+            ]);
+
+            if ($response->successful()) {
+                $data = $response->json();
+                if (($data['status'] ?? '0') === '1' && !empty($data['pois'])) {
+                    $attractions = [];
+                    foreach ($data['pois'] as $poi) {
+                        $photos = [];
+                        if (!empty($poi['photos']) && is_array($poi['photos'])) {
+                            foreach ($poi['photos'] as $p) {
+                                if (!empty($p['url'])) {
+                                    $photos[] = $p['url'];
+                                }
+                            }
+                        }
+                        $type = $poi['type'] ?? '景点';
+                        $typeParts = explode(';', $type);
+                        $type = end($typeParts);
+
+                        $lng = null;
+                        $lat = null;
+                        if (!empty($poi['location'])) {
+                            $parts = explode(',', (string)$poi['location']);
+                            if (count($parts) === 2) {
+                                $lng = (float)$parts[0];
+                                $lat = (float)$parts[1];
+                            }
+                        }
+
+                        $attractions[] = [
+                            'name' => $poi['name'] ?? 'Unknown',
+                            'type' => $type,
+                            'address' => is_string($poi['address'] ?? null) ? $poi['address'] : 'No address provided',
+                            'photos' => $photos,
+                            'rating' => $poi['biz_ext']['rating'] ?? null,
+                            'lat' => $lat,
+                            'lng' => $lng,
+                        ];
+                    }
+
+                    if (!empty($attractions)) {
+                        $result = [
+                            'list' => $attractions,
+                            'source' => 'real',
+                        ];
+                        ApiCache::setCache($cacheKey, 'amap', $result, 120);
+                        return $result;
+                    }
+                }
+            }
+            Log::warning('Amap API response not successful or empty', [
+                'city' => $city,
+                'status' => $response->status(),
+                'body' => $response->body(),
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Amap API Error: ' . $e->getMessage());
+        }
+
+        return $this->getMockAmapData($city);
     }
 
     protected function getAmadeusToken(): ?string
@@ -485,10 +707,15 @@ class ApiService
 
     protected function getMockHotelData(string $city): array
     {
+        $cityName = $city ?: 'Sample City';
+        $coords = $this->getCityCoordinates($city);
+        $baseLat = $coords[0] !== 0 ? $coords[0] : 35.6895;
+        $baseLng = $coords[1] !== 0 ? $coords[1] : 139.6917;
+
         return [
-            ['name' => 'Sample Hotel A', 'rating' => '4.5', 'price' => 'From CNY 800'],
-            ['name' => 'Sample Hotel B', 'rating' => '4.2', 'price' => 'From CNY 600'],
-            ['name' => 'Sample Hotel C', 'rating' => '4.0', 'price' => 'From CNY 500'],
+            ['name' => 'Grand ' . $cityName . ' Hotel', 'rating' => '8.5 Very Good', 'price' => 'USD 120', 'image' => 'https://cf.bstatic.com/xdata/images/hotel/square250/301726058.jpg?k=b4eab087e53f095166f2847fb5dcee9b2d354a78aa7677941fb621cda2ebef0b&o=', 'lat' => $baseLat + 0.01, 'lng' => $baseLng + 0.01],
+            ['name' => 'The ' . $cityName . ' Resort', 'rating' => '9.0 Superb', 'price' => 'USD 180', 'image' => 'https://cf.bstatic.com/xdata/images/hotel/square250/244384074.jpg?k=ff36c6adacb3472be907bc0c410eefca6ba792a514d02636dcde103dc551d0ab&o=', 'lat' => $baseLat - 0.01, 'lng' => $baseLng - 0.01],
+            ['name' => 'Budget Inn ' . $cityName, 'rating' => '7.8 Good', 'price' => 'USD 90', 'image' => 'https://cf.bstatic.com/xdata/images/hotel/square250/253905581.jpg?k=f8abdfb175dc8eeb59eaddb2add4ea7d6f5cfa4ba4a0ebfb0b5220c37bcea7f1&o=', 'lat' => $baseLat + 0.015, 'lng' => $baseLng - 0.015],
         ];
     }
 
@@ -498,5 +725,118 @@ class ApiService
             ['id' => 1, 'title' => 'Local Signature Dish 1', 'image' => 'https://spoonacular.com/recipeImages/1-312x231.jpg', 'summary' => 'Recommended local flavor'],
             ['id' => 2, 'title' => 'Local Signature Dish 2', 'image' => 'https://spoonacular.com/recipeImages/2-312x231.jpg', 'summary' => 'Popular local pick'],
         ];
+    }
+
+    protected function getMockExchangeRateData(): array
+    {
+        return [
+            'base' => 'HKD',
+            'rates' => [
+                'HKD' => 1.0,
+                'USD' => 0.128,
+                'EUR' => 0.117,
+                'JPY' => 19.34,
+                'CNY' => 0.923,
+                'GBP' => 0.091,
+                'KRW' => 174.5,
+                'THB' => 4.5,
+                'SGD' => 0.17,
+            ],
+            'source' => 'mock'
+        ];
+    }
+
+    protected function getMockAmapData(string $city): array
+    {
+        $coords = $this->getCityCoordinates($city);
+        $baseLat = $coords[0] !== 0 ? $coords[0] : 35.6895;
+        $baseLng = $coords[1] !== 0 ? $coords[1] : 139.6917;
+
+        return [
+            'list' => [
+                [
+                    'name' => ($city ?: 'Sample City') . ' Museum',
+                    'type' => 'Museum',
+                    'address' => '123 Main Street',
+                    'photos' => [],
+                    'rating' => '4.8',
+                    'lat' => $baseLat + 0.005,
+                    'lng' => $baseLng + 0.005,
+                ],
+                [
+                    'name' => ($city ?: 'Sample City') . ' Central Park',
+                    'type' => 'Park',
+                    'address' => '456 Green Ave',
+                    'photos' => [],
+                    'rating' => '4.5',
+                    'lat' => $baseLat - 0.005,
+                    'lng' => $baseLng - 0.005,
+                ],
+            ],
+            'source' => 'mock'
+        ];
+    }
+
+    protected function normalizeAmapCity(string $city): string
+    {
+        $map = [
+            'Tokyo' => '东京',
+            'Paris' => '巴黎',
+            'New York' => '纽约',
+            'London' => '伦敦',
+            'Seoul' => '首尔',
+            'Bangkok' => '曼谷',
+            'Rome' => '罗马',
+            'Hong Kong' => '香港',
+            'Singapore' => '新加坡',
+            'Osaka' => '大阪',
+            'Beijing' => '北京',
+            'Shanghai' => '上海',
+        ];
+
+        foreach ($map as $en => $zh) {
+            if (stripos($city, $en) !== false) {
+                return $zh;
+            }
+        }
+        return $city;
+    }
+
+    public function getCityCoordinates(string $city): array
+    {
+        $cityCoords = [
+            '东京' => [35.6895, 139.6917],
+            'Tokyo' => [35.6895, 139.6917],
+            '巴黎' => [48.8566, 2.3522],
+            'Paris' => [48.8566, 2.3522],
+            '纽约' => [40.7128, -74.0060],
+            'New York' => [40.7128, -74.0060],
+            '北京' => [39.9042, 116.4074],
+            'Beijing' => [39.9042, 116.4074],
+            '上海' => [31.2304, 121.4737],
+            'Shanghai' => [31.2304, 121.4737],
+            '伦敦' => [51.5072, -0.1276],
+            'London' => [51.5072, -0.1276],
+            '首尔' => [37.5665, 126.9780],
+            'Seoul' => [37.5665, 126.9780],
+            '曼谷' => [13.7563, 100.5018],
+            'Bangkok' => [13.7563, 100.5018],
+            '罗马' => [41.9028, 12.4964],
+            'Rome' => [41.9028, 12.4964],
+            '香港' => [22.3193, 114.1694],
+            'Hong Kong' => [22.3193, 114.1694],
+            '新加坡' => [1.3521, 103.8198],
+            'Singapore' => [1.3521, 103.8198],
+            '大阪' => [34.6937, 135.5023],
+            'Osaka' => [34.6937, 135.5023]
+        ];
+
+        foreach ($cityCoords as $name => $coord) {
+            if (stripos($city, $name) !== false) {
+                return $coord;
+            }
+        }
+        
+        return [0, 0];
     }
 }

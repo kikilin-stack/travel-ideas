@@ -48,4 +48,16 @@ return [
         'key' => env('SPOONACULAR_API_KEY'),
     ],
 
+    'exchangerate' => [
+        'key' => env('EXCHANGERATE_API_KEY'),
+    ],
+
+    'amap' => [
+        'key' => env('AMAP_API_KEY'),
+    ],
+
+    'rapidapi_booking' => [
+        'key' => env('RAPIDAPI_BOOKING_KEY'),
+    ],
+
 ];

@@ -2,6 +2,8 @@
 @section('title', $idea->title)
 
 @section('content')
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 <div class="container">
     <div class="idea-detail">
         <div class="detail-header">
@@ -42,6 +44,8 @@
 
     <div class="api-sections">
         <h2>Destination Insights</h2>
+        
+        <div id="interactiveMap" style="height: 400px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); z-index: 1; margin-bottom: 25px;"></div>
 
         <div class="api-box" id="weatherBox" data-city="{{ $idea->destination }}">
             <h3>🌤️ Weather Forecast</h3>
@@ -64,17 +68,152 @@
             </div>
         </div>
 
+        <div class="api-box" id="exchangeRateBox">
+            <h3>💱 Currency & Language</h3>
+            <div class="api-content" id="exchangeRateContent" style="padding: 10px;">
+                @if($exchangeRates && !empty($exchangeRates['rates']))
+                    @if(!empty($exchangeRates['source']) && $exchangeRates['source'] === 'mock')
+                        <p class="api-error" style="margin-bottom: 15px;">Currently showing mock exchange rates.</p>
+                    @endif
+                    <div class="exchange-widget" style="background: #f8f9fa; border-radius: 12px; padding: 20px; text-align: center; border: 1px solid #eee;">
+                        <!-- Destination info badge -->
+                        <div style="display:inline-block; background: #eef2ff; color: #4f46e5; padding: 6px 14px; border-radius: 20px; font-size: 13px; font-weight: 600; margin-bottom: 20px;">
+                            🗣️ Local Language: {{ $cityInfo['language'] }}
+                        </div>
+
+                        <!-- Converter Form -->
+                        <div style="display: flex; align-items: center; justify-content: center; gap: 15px; margin-bottom: 20px; flex-wrap: wrap;">
+                            <!-- HKD Input -->
+                            <div style="display: flex; flex-direction: column; align-items: flex-start;">
+                                <label style="font-size: 12px; font-weight: 700; color: #6b7280; margin-bottom: 5px; text-transform: uppercase;">You Spend (HKD)</label>
+                                <div style="position: relative;">
+                                    <span style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); font-weight:bold; color: #9ca3af;">$</span>
+                                    <input type="number" id="hkdAmount" value="100" min="0" style="width: 140px; padding: 10px 10px 10px 25px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 15px; font-weight: 600; outline: none; background: #fff;">
+                                </div>
+                            </div>
+
+                            <!-- Exchange Icon -->
+                            <div style="margin-top: 20px; color: #9ca3af;">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                  <path d="M5 12h14"></path>
+                                  <path d="m12 5 7 7-7 7"></path>
+                                </svg>
+                            </div>
+
+                            <!-- Target Currency -->
+                            <div style="display: flex; flex-direction: column; align-items: flex-start;">
+                                <label style="font-size: 12px; font-weight: 700; color: #6b7280; margin-bottom: 5px; text-transform: uppercase;">Target Currency</label>
+                                <select id="targetCurrencySelect" style="width: 140px; padding: 10px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 15px; font-weight: 600; background-color: #fff; outline: none; cursor: pointer;">
+                                    @foreach($exchangeRates['rates'] as $cur => $rate)
+                                        <option value="{{ $cur }}" data-rate="{{ $rate }}" {{ $cityInfo['currency'] === $cur ? 'selected' : '' }}>{{ $cur }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Results Display -->
+                        <div style="background: #fff; padding: 15px; border-radius: 8px; border: 1px solid #e5e7eb; display: inline-block; min-width: 250px;">
+                            <div style="font-size: 2.2rem; font-weight: 800; color: #10b981; line-height: 1;">
+                                <span id="convertedAmount">0.00</span> <span id="convertedCurrency" style="font-size: 1.25rem;">{{ $cityInfo['currency'] }}</span>
+                            </div>
+                            <div style="font-size: 0.85rem; color: #6b7280; margin-top: 8px; font-weight: 500;">
+                                Rate: 1 HKD = <span id="currentRateLabel">0.00</span> <span id="currentRateCurrency">{{ $cityInfo['currency'] }}</span>
+                            </div>
+                        </div>
+                    </div>
+                @else
+                    <p class="api-error">Exchange rates are temporarily unavailable</p>
+                @endif
+            </div>
+        </div>
+
+        <div class="api-box" id="budgetEstimatorBox">
+            <h3>💰 Dynamic Trip Budget Estimator</h3>
+            <div class="api-content" style="padding: 10px;">
+                <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 25px; box-shadow: 0 4px 6px rgba(0,0,0,0.02);">
+                    
+                    <div style="display: flex; gap: 30px; flex-wrap: wrap;">
+                        <!-- Controls -->
+                        <div style="flex: 1; min-width: 280px; padding-right: 20px; border-right: 1px dashed #e2e8f0;">
+                            <!-- Days Slider -->
+                            <div style="margin-bottom: 25px;">
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                                    <label style="font-size: 13px; font-weight: 700; color: #475569; text-transform: uppercase;">Duration</label>
+                                    <span id="durationVal" style="font-weight: bold; color: #3b82f6;">3 Days</span>
+                                </div>
+                                <input type="range" id="durationSlider" min="1" max="30" value="3" style="width: 100%; cursor: pointer;">
+                            </div>
+                            
+                            <!-- Travelers Slider -->
+                            <div style="margin-bottom: 25px;">
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                                    <label style="font-size: 13px; font-weight: 700; color: #475569; text-transform: uppercase;">Travelers</label>
+                                    <span id="travelersVal" style="font-weight: bold; color: #3b82f6;">2 People</span>
+                                </div>
+                                <input type="range" id="travelersSlider" min="1" max="10" value="2" style="width: 100%; cursor: pointer;">
+                            </div>
+
+                            <!-- Travel Style -->
+                            <div>
+                                <label style="font-size: 13px; font-weight: 700; color: #475569; margin-bottom: 10px; display: block; text-transform: uppercase;">Travel Style</label>
+                                <div style="display: flex; gap: 10px;" id="styleRadioGroup">
+                                    <label style="flex:1; text-align:center; padding: 10px 5px; border: 1px solid #cbd5e1; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; transition: all 0.2s;" class="style-radio-label" data-value="budget">
+                                        <input type="radio" name="travelStyle" value="budget" style="display:none;">
+                                        🎒 Budget
+                                    </label>
+                                    <label style="flex:1; text-align:center; padding: 10px 5px; border: 2px solid #3b82f6; background: #eff6ff; color: #1d4ed8; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; transition: all 0.2s;" class="style-radio-label active-style" data-value="standard">
+                                        <input type="radio" name="travelStyle" value="standard" checked style="display:none;">
+                                        💼 Standard
+                                    </label>
+                                    <label style="flex:1; text-align:center; padding: 10px 5px; border: 1px solid #cbd5e1; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; transition: all 0.2s;" class="style-radio-label" data-value="luxury">
+                                        <input type="radio" name="travelStyle" value="luxury" style="display:none;">
+                                        ✨ Luxury
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Readout -->
+                        <div style="flex: 1; min-width: 250px; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; background: #f8fafc; border-radius: 12px; padding: 20px;">
+                            <h4 style="margin: 0 0 10px 0; color: #64748b; font-size: 14px; text-transform: uppercase;">Estimated Total</h4>
+                            <div style="font-size: 2.8rem; font-weight: 800; color: #0f172a; line-height: 1;">
+                                <span style="font-size: 1.5rem; color: #94a3b8; vertical-align: middle;">$</span><span id="totalHkdOut">0</span> <span style="font-size: 1.2rem; color: #64748b; font-weight: 600;">HKD</span>
+                            </div>
+                            <div style="margin-top: 15px; background: #e0e7ff; color: #4338ca; padding: 8px 16px; border-radius: 20px; font-weight: 600; font-size: 15px; display: inline-flex; align-items: center; gap: 8px;">
+                                <span style="font-size: 1.2em;">≈</span>
+                                <span id="totalLocalOut">0</span> <span id="budgetLocalCur">{{ $cityInfo['currency'] }}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
         <div class="api-box" id="hotelBox">
             <h3>🏨 Recommended Hotels</h3>
             <div class="api-content" id="hotelContent">
                 @if($hotelData && count($hotelData) > 0)
-                    @foreach($hotelData as $hotel)
-                    <div class="hotel-item">
-                        <h4>{{ $hotel['name'] }}</h4>
-                        <p class="rating">⭐ {{ $hotel['rating'] ?? 'No rating yet' }}</p>
-                        <p class="price">💰 {{ $hotel['price'] ?? 'Price unavailable' }}</p>
+                    <div class="hotels-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 15px;">
+                        @foreach($hotelData as $hotel)
+                        <div class="hotel-card" style="border: 1px solid #eee; border-radius: 8px; overflow: hidden; background: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: transform 0.2s;">
+                            @if(!empty($hotel['image']))
+                                <div class="hotel-img" style="height: 160px; background: url('{{ $hotel['image'] }}') center/cover; position: relative;">
+                                    <span style="position: absolute; bottom: 10px; right: 10px; background: rgba(0,0,0,0.75); color: #fff; font-size: 13px; font-weight:bold; padding: 4px 8px; border-radius: 4px;">{{ $hotel['price'] }}</span>
+                                </div>
+                            @else
+                                <div class="hotel-img" style="height: 160px; background: #f3f4f6; display: flex; align-items: center; justify-content: center; position: relative;">
+                                    <span style="font-size: 2rem; color: #cbd5e1;">🏨</span>
+                                    <span style="position: absolute; bottom: 10px; right: 10px; background: rgba(0,0,0,0.75); color: #fff; font-size: 13px; font-weight:bold; padding: 4px 8px; border-radius: 4px;">{{ $hotel['price'] }}</span>
+                                </div>
+                            @endif
+                            <div class="hotel-info" style="padding: 15px;">
+                                <h4 style="margin: 0 0 8px 0; font-size: 16px; color: #1e293b; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">{{ $hotel['name'] }}</h4>
+                                <p style="margin: 0; font-size: 13.5px; color: #f59e0b; font-weight: 600;">⭐ {{ $hotel['rating'] ?? 'New / No rating' }}</p>
+                            </div>
+                        </div>
+                        @endforeach
                     </div>
-                    @endforeach
                 @else
                     <p class="api-error">Hotel data is temporarily unavailable</p>
                 @endif
@@ -94,6 +233,42 @@
                     @endforeach
                 @else
                     <p class="api-error">Food data is temporarily unavailable</p>
+                @endif
+            </div>
+        </div>
+
+        <div class="api-box" id="amapBox">
+            <h3>🗺️ Top Attractions</h3>
+            <div class="api-content" id="amapContent">
+                @if($amapData && !empty($amapData['list']))
+                    @if(!empty($amapData['source']) && $amapData['source'] === 'mock')
+                        <p class="api-error" style="margin-bottom: 15px;">Currently showing mock attractions.</p>
+                    @endif
+                    <div class="attractions-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 15px;">
+                        @foreach($amapData['list'] as $poi)
+                        <div class="attraction-card" style="border: 1px solid #eee; border-radius: 8px; overflow: hidden; background: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                            @if(!empty($poi['photos']) && count($poi['photos']) > 0)
+                                <div class="attraction-img" style="height: 150px; background: url('{{ $poi['photos'][0] }}') center/cover; position: relative;">
+                                    <span style="position: absolute; bottom: 10px; right: 10px; background: rgba(0,0,0,0.6); color: #fff; font-size: 11px; padding: 2px 6px; border-radius: 4px;">{{ $poi['type'] }}</span>
+                                </div>
+                            @else
+                                <div class="attraction-img" style="height: 120px; background: #f3f4f6; display: flex; align-items: center; justify-content: center; position: relative;">
+                                    <span style="font-size: 2rem; color: #cbd5e1;">📸</span>
+                                    <span style="position: absolute; bottom: 10px; right: 10px; background: rgba(0,0,0,0.6); color: #fff; font-size: 11px; padding: 2px 6px; border-radius: 4px;">{{ $poi['type'] }}</span>
+                                </div>
+                            @endif
+                            <div class="attraction-info" style="padding: 12px;">
+                                <h4 style="margin: 0 0 8px 0; font-size: 16px; color: #1e293b;">{{ $poi['name'] }}</h4>
+                                <p style="margin: 0; font-size: 13px; color: #64748b; margin-bottom: 8px;">📍 {{ $poi['address'] }}</p>
+                                @if(!empty($poi['rating']))
+                                    <p style="margin: 0; font-size: 13px; color: #f59e0b; font-weight: 600;">⭐ {{ $poi['rating'] }} / 5.0</p>
+                                @endif
+                            </div>
+                        </div>
+                        @endforeach
+                    </div>
+                @else
+                    <p class="api-error">Local attraction data is temporarily unavailable</p>
                 @endif
             </div>
         </div>
@@ -273,6 +448,107 @@ $(function() {
             error: function() { alert('Delete failed. Please try again.'); }
         });
     });
+
+    function updateExchangeRate() {
+        var $opt = $('#targetCurrencySelect option:selected');
+        if (!$opt.length) return;
+        var rate = parseFloat($opt.data('rate') || 0);
+        var cur = $opt.val();
+        var amount = parseFloat($('#hkdAmount').val() || 0);
+        var converted = (amount * rate).toFixed(2);
+        $('#convertedAmount').text(converted);
+        $('#convertedCurrency').text(cur);
+        $('#currentRateLabel').text(rate.toFixed(4));
+        $('#currentRateCurrency').text(cur);
+    }
+
+    if ($('#exchangeRateBox').length) {
+        $('#hkdAmount').on('input', updateExchangeRate);
+        $('#targetCurrencySelect').on('change', updateExchangeRate);
+        updateExchangeRate();
+    }
+
+    // Interactive Map Initialization
+    @if(isset($cityCoords) && $cityCoords[0] !== 0)
+    if ($('#interactiveMap').length) {
+        var map = L.map('interactiveMap').setView([{{ $cityCoords[0] }}, {{ $cityCoords[1] }}], 13);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
+
+        var redIcon = new L.Icon({
+            iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
+            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+            iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41]
+        });
+
+        // Attractions (Amap) - Red
+        @if(!empty($amapData['list']))
+            @foreach($amapData['list'] as $poi)
+                @if(!empty($poi['lat']) && !empty($poi['lng']))
+                    L.marker([{{ $poi['lat'] }}, {{ $poi['lng'] }}], {icon: redIcon}).addTo(map)
+                        .bindPopup('<b>{{ addslashes($poi['name']) }}</b><br>🎯 Top Attraction');
+                @endif
+            @endforeach
+        @endif
+
+        // Hotels (Booking) - Blue
+        @if(!empty($hotelData))
+            @foreach($hotelData as $hotel)
+                @if(!empty($hotel['lat']) && !empty($hotel['lng']))
+                    L.marker([{{ $hotel['lat'] }}, {{ $hotel['lng'] }}]).addTo(map)
+                        .bindPopup('<b>{{ addslashes($hotel['name']) }}</b><br>🏨 Hotel<br>Price: {{ addslashes($hotel['price']) }}');
+                @endif
+            @endforeach
+        @endif
+    }
+    @endif
+
+    // Dynamic Budget Estimator Logic
+    if ($('#budgetEstimatorBox').length) {
+        var baseRate = 0;
+        @if(isset($cityInfo['currency']) && isset($exchangeRates['rates'][$cityInfo['currency']]))
+            baseRate = {{ $exchangeRates['rates'][$cityInfo['currency']] }};
+        @endif
+
+        function calculateBudget() {
+            var days = parseInt($('#durationSlider').val()) || 1;
+            var people = parseInt($('#travelersSlider').val()) || 1;
+            var style = $('input[name="travelStyle"]:checked').val() || 'standard';
+
+            $('#durationVal').text(days + (days === 1 ? ' Day' : ' Days'));
+            $('#travelersVal').text(people + (people === 1 ? ' Person' : ' People'));
+
+            var hotelRooms = Math.ceil(people / 2);
+            var foodPPD, hotelPRPD; // Per Person Day, Per Room Per Day (HKD)
+
+            switch(style) {
+                case 'budget': foodPPD = 200; hotelPRPD = 300; break;
+                case 'luxury': foodPPD = 1500; hotelPRPD = 2500; break;
+                case 'standard': 
+                default: foodPPD = 500; hotelPRPD = 800; break;
+            }
+
+            var totalHkd = (foodPPD * people * days) + (hotelPRPD * hotelRooms * days);
+            var totalLocal = totalHkd * baseRate;
+
+            // Animate or set
+            $('#totalHkdOut').text(totalHkd.toLocaleString());
+            $('#totalLocalOut').text(totalLocal.toLocaleString(undefined, {maximumFractionDigits:0}));
+        }
+
+        // Bind events
+        $('#durationSlider, #travelersSlider').on('input', calculateBudget);
+        $('.style-radio-label').on('click', function() {
+            $('.style-radio-label').removeClass('active-style').css({'border': '1px solid #cbd5e1', 'background':'transparent', 'color':'inherit'});
+            $(this).addClass('active-style').css({'border': '2px solid #3b82f6', 'background':'#eff6ff', 'color':'#1d4ed8'});
+            $(this).find('input').prop('checked', true);
+            calculateBudget();
+        });
+
+        // Initial calculation
+        calculateBudget();
+    }
 });
 </script>
 @endpush

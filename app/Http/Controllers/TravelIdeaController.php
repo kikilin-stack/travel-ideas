@@ -52,12 +52,20 @@ class TravelIdeaController extends Controller
             : null;
         $hotelData = $this->apiService->getHotels($idea->destination, $checkInDate);
         $foodData = $this->apiService->getFood($idea->destination);
+        $exchangeRates = $this->apiService->getExchangeRates();
+        $cityInfo = $this->apiService->getCityLanguageAndCurrency($idea->destination);
+        $amapData = $this->apiService->getAmapAttractions($idea->destination);
+        $cityCoords = $this->apiService->getCityCoordinates($idea->destination);
 
         return view('travel-ideas.show', [
             'idea' => $idea,
             'weatherData' => $weatherData,
             'hotelData' => $hotelData,
             'foodData' => $foodData,
+            'exchangeRates' => $exchangeRates,
+            'cityInfo' => $cityInfo,
+            'amapData' => $amapData,
+            'cityCoords' => $cityCoords,
         ]);
     }
 
